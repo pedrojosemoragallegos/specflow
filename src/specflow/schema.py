@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .composition import Composition
-from .type import Type
+from .compositions import Composition
+from .types import Type
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from .condition import Condition
+    from .conditions import Condition
 
 
 class Schema:

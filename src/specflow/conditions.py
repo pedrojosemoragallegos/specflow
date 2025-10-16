@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ._typing import JSON
     from .schema import Schema
-    from .type import Type
+    from .types import Type
 
 
 class ConditionError(Exception): ...

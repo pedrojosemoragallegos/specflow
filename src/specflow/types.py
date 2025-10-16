@@ -8,7 +8,7 @@ from ._typing import JSON, E, T
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from .constraint import Constraint
+    from .constraints import Constraint
 
 
 ## Base Type
