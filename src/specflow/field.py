@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 T = TypeVar("T", str, int, float, bool)
 
 
+## General Overloads
 @overload
 def Field(
     title: str,
@@ -91,10 +92,7 @@ def Field(
 ) -> Array: ...
 
 
-# Inferred type overloads (when type_ is not provided)
-
-
-# String inference - based on string-specific parameters
+## String inference - based on string-specific parameters
 @overload
 def Field(
     title: str,
@@ -175,7 +173,23 @@ def Field(
 ) -> String: ...
 
 
-# Integer inference - based on integer-specific parameters
+@overload
+def Field(
+    title: str,
+    description: str | None = None,
+    *,
+    default: str,
+    const: str | None = None,
+    min_length: int | None = None,
+    max_length: int | None = None,
+    pattern: str | None = None,
+    enum: list[str] | None = None,
+    constraints: list[Constraint[str]] | None = None,
+    nullable: bool = False,
+) -> String: ...
+
+
+## Integer inference - based on integer-specific parameters
 @overload
 def Field(
     title: str,
@@ -256,7 +270,23 @@ def Field(
 ) -> Integer: ...
 
 
-# Number/Float inference - based on float-specific parameters
+@overload
+def Field(
+    title: str,
+    description: str | None = None,
+    *,
+    default: int,
+    minimum: int | None = None,
+    maximum: int | None = None,
+    exclusive_minimum: int | None = None,
+    exclusive_maximum: int | None = None,
+    mult: int | None = None,
+    constraints: list[Constraint[int]] | None = None,
+    nullable: bool = False,
+) -> Integer: ...
+
+
+## Number/Float inference - based on float-specific parameters
 @overload
 def Field(
     title: str,
@@ -337,7 +367,35 @@ def Field(
 ) -> Number: ...
 
 
-# Array inference - based on array-specific parameters
+@overload
+def Field(
+    title: str,
+    description: str | None = None,
+    *,
+    default: float,
+    minimum: float | None = None,
+    maximum: float | None = None,
+    exclusive_minimum: float | None = None,
+    excluvie_maximum: float | None = None,
+    mult: float | None = None,
+    constraints: list[Constraint[float]] | None = None,
+    nullable: bool = False,
+) -> Number: ...
+
+
+## Boolean inference - based on boolean-specific parameters
+@overload
+def Field(
+    title: str,
+    description: str | None = None,
+    *,
+    default: bool,
+    constraints: list[Constraint[bool]] | None = None,
+    nullable: bool = False,
+) -> Boolean: ...
+
+
+## Array inference - based on array-specific parameters
 @overload
 def Field(
     title: str,
@@ -428,12 +486,12 @@ def Field(
 ) -> Array: ...
 
 
-# Implementation
-def Field(
+## Implementation
+def Field(  # noqa: C901, N802, PLR0911 # type: ignore
     title: str,
     type_: Literal["string", "integer", "number", "boolean", "array"] | None = None,
     description: str | None = None,
-    default: str | float | bool | None = None,
+    default: str | float | bool | None = None,  # noqa: FBT001
     # String specific
     const: str | None = None,
     min_length: int | None = None,
@@ -457,7 +515,7 @@ def Field(
     prefix_items: list[String | Number | Integer | Boolean | Schema] | None = None,
     # Generic
     constraints: list[Constraint] | None = None,  # type: ignore
-    nullable: bool = False,
+    nullable: bool = False,  # noqa: FBT001, FBT002
 ) -> String | Integer | Number | Boolean | Array:
     # If type is explicitly provided, use it
     if type_ == "string":
@@ -550,11 +608,31 @@ def Field(
             nullable=nullable,
         )
 
+    # Boolean inference from default
+    if isinstance(default, bool):
+        return Boolean(
+            title=title,
+            description=description,
+            default=default,
+            constraints=constraints,  # type: ignore
+            nullable=nullable,
+        )
+
+    # String inference from default
+    if isinstance(default, str):
+        return String(
+            title=title,
+            description=description,
+            default=default,
+            constraints=constraints,  # type: ignore
+            nullable=nullable,
+        )
+
     # Check if parameters suggest float (Number) vs int (Integer)
     # If any parameter is explicitly a float, use Number
-    if any(
+    has_float_values = any(
         isinstance(val, float)
-        for val in [
+        for val in [  # type: ignore
             default,
             minimum,
             maximum,
@@ -564,7 +642,21 @@ def Field(
             mult,
         ]
         if val is not None
-    ):
+    )
+
+    has_numeric_constraints = any(
+        [
+            minimum is not None,
+            maximum is not None,
+            exclusive_minimum is not None,
+            exclusive_maximum is not None,
+            excluvie_maximum is not None,
+            mult is not None,
+        ],
+    )
+
+    # If we have float values, infer Number
+    if has_float_values:
         return Number(
             title=title,
             description=description,
@@ -578,13 +670,8 @@ def Field(
             nullable=nullable,
         )
 
-    # Integer-specific parameters (or integer default)
-    if any(
-        [minimum, maximum, exclusive_minimum, exclusive_maximum, mult],
-    ) or isinstance(
-        default,
-        int,
-    ):
+    # If we have an integer default, infer Integer
+    if isinstance(default, int):
         return Integer(
             title=title,
             description=description,
@@ -598,31 +685,23 @@ def Field(
             nullable=nullable,
         )
 
-    # If default is a bool, infer Boolean
-    if isinstance(default, bool):
-        return Boolean(
-            title=title,
-            description=description,
-            default=default,
-            constraints=constraints,  # type: ignore
-            nullable=nullable,
+    # If we have numeric constraints but no clear type indicator, this is ambiguous
+    if has_numeric_constraints:
+        raise ValueError(
+            f"Cannot infer type for field '{title}'. "
+            f"Numeric constraints (minimum, maximum, etc.) are ambiguous without a default value or explicit type_. "
+            f"Please provide either:\n"
+            f"  - A default value with the appropriate type (int or float)\n"
+            f"  - An explicit type_ parameter ('integer' or 'number')",
         )
 
-    # If default is a string, infer String
-    if isinstance(default, str):
-        return String(
-            title=title,
-            description=description,
-            default=default,
-            constraints=constraints,  # type: ignore
-            nullable=nullable,
-        )
-
-    # Default to String if no type can be inferred
-    return String(
-        title=title,
-        description=description,
-        default=default,  # type: ignore
-        constraints=constraints,  # type: ignore
-        nullable=nullable,
+    # If we reach here with only title/description/constraints, this is ambiguous
+    raise ValueError(
+        f"Cannot infer type for field '{title}'. "
+        f"Please specify type_ parameter or provide type-specific parameters such as:\n"
+        f"  - For String: min_length, max_length, pattern, enum, const, or a str default\n"
+        f"  - For Integer: minimum, maximum, mult with an int default\n"
+        f"  - For Number: minimum, maximum, mult with a float default\n"
+        f"  - For Boolean: a bool default\n"
+        f"  - For Array: min_items, max_items, items, prefix_items",
     )

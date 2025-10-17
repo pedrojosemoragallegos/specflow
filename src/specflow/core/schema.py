@@ -15,7 +15,9 @@ class Schema:
     def __init__(
         self,
         title: str,
-        properties: list[String | Number | Integer | Boolean | Composition | Schema],
+        properties: list[
+            String | Number | Integer | Boolean | Composition | Schema | Array
+        ],
         conditions: list[Condition] | None = None,
         description: str | None = None,
     ) -> None:
@@ -23,12 +25,15 @@ class Schema:
             raise ValueError("'properties' can't be empty.")
 
         self._title: str = title
-        self._items: dict[str, String | Number | Integer | Boolean | Schema] = {}
+        self._items: dict[
+            str,
+            String | Number | Integer | Boolean | Schema | Array,
+        ] = {}
         self._compositions: list[Composition] = []
         self._conditions: list[Condition] | None = conditions
         self._description: str | None = description
         self._properties: list[
-            String | Number | Integer | Boolean | Composition | Schema
+            String | Number | Integer | Boolean | Composition | Array | Schema
         ] = properties
 
         for property_ in properties:
