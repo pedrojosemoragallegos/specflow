@@ -84,7 +84,7 @@ class Array:
     def title(self) -> str:
         return self._title
 
-    def __call__(self, to_validate: list[Object] | None) -> None:
+    def __call__(self, to_validate: list[Object] | None) -> None:  # noqa: C901
         if self._min_items is not None:
             MinItems(self._min_items)(to_validate)
         if self._max_items is not None:
@@ -94,9 +94,25 @@ class Array:
         if self._max_contains is not None:
             MaxContains(self._max_contains)(to_validate)
 
-        if (self._prefix_items is not None) and (to_validate is not None):
-            for value, fn in zip(to_validate, self._prefix_items, strict=False):
-                fn(value)  # type: ignore
+        if to_validate is not None:
+            # First, validate prefix_items (positional schemas for first N items)
+            if self._prefix_items is not None:
+                for _i, (value, schema) in enumerate(
+                    zip(to_validate, self._prefix_items, strict=False),
+                ):
+                    schema(value)  # type: ignore
+
+                # Then validate remaining items (after prefix_items) with items schema
+                if self._items is not None and len(to_validate) > len(
+                    self._prefix_items,
+                ):
+                    for value in to_validate[len(self._prefix_items) :]:
+                        self._items(value)  # type: ignore
+
+            # If no prefix_items, validate all items with items schema
+            elif self._items is not None:
+                for value in to_validate:
+                    self._items(value)  # type: ignore
 
     def to_dict(self) -> Object:
         data: Object = {
