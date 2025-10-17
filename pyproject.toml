@@ -1,6 +1,6 @@
 [project]
 name = "specflow"
-version = "0.0.1"
+version = "0.0.2"
 description = "A Python library for JSON Schema validation with a fluent, type-safe API"
 readme = "README.md"
 license = "MIT"
