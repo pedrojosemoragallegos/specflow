@@ -4,13 +4,12 @@ A modern, type-safe Python library for JSON Schema validation with a fluent, com
 
 ## Features
 
-- **Type-safe**: Full type hints with mypy support
-- **Fluent API**: Intuitive, Pythonic interface for schema definition
-- **Comprehensive validation**: Support for all JSON Schema constraint types
-- **Composable schemas**: Built-in support for `anyOf`, `oneOf`, and `not` compositions
-- **Conditional validation**: `if-then-else` conditional schema support
-- **Flexible constraints**: String patterns, numeric ranges, array sizes, and more
-- **Extensible**: Easy to extend with custom types and constraints
+- **Type-Safe Validation** - Built with Python type hints for better IDE support and type checking
+- **Composable Schemas** - Combine schemas using `AnyOf`, `OneOf`, and `Not` compositions
+- **Conditional Logic** - Define conditional validation rules with `if/then/else` conditions
+- **Rich Constraints** - Support for string patterns, numeric ranges, array constraints, and more
+- **Clear Error Messages** - Descriptive validation errors with path information
+- **JSON Schema Compatible** - Export schemas to JSON Schema format
 
 ## Installation
 
@@ -18,619 +17,461 @@ A modern, type-safe Python library for JSON Schema validation with a fluent, com
 pip install specflow
 ```
 
-Or with Poetry:
-
-```bash
-poetry add specflow
-```
-
 ## Quick Start
 
 ```python
 from specflow import Schema
-from specflow.type import String, Integer
-from specflow.constraint import MinLength, Maximum
+from specflow.types import String, Integer, Boolean, Array
 
-# Define a simple user schema
+# Define a user schema
 user_schema = Schema(
     title="User",
+    description="A user object",
     properties=[
-        String("username", constraints=[MinLength(3)]),
-        String("email"),
-        Integer("age", constraints=[Maximum(120)])
+        String(
+            title="username",
+            description="User's username",
+            min_length=3,
+            max_length=20,
+            pattern=r"^[a-zA-Z0-9_]+$"
+        ),
+        String(
+            title="email",
+            description="User's email address",
+            pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+        ),
+        Integer(
+            title="age",
+            description="User's age",
+            minimum=0,
+            maximum=150
+        ),
+        Boolean(
+            title="is_active",
+            description="Whether the user account is active",
+            default=True
+        )
     ]
 )
 
 # Validate data
+data = {
+    "username": "john_doe",
+    "email": "john@example.com",
+    "age": 25,
+    "is_active": True
+}
+
 try:
-    user_schema({
-        "username": "john_doe",
-        "email": "john@example.com",
-        "age": 30
-    })
-    print("✓ Valid!")
-except Exception as e:
-    print(f"✗ Invalid: {e}")
+    user_schema(data)
+    print("✓ Validation passed!")
+except ValidationError as e:
+    print(f"✗ Validation failed: {e}")
 ```
 
-## Core Concepts
+## Core Components
 
-### Schema Structure
+### Types
 
-The `Schema` class serves as the container for your validation rules:
+SpecFlow provides four primitive types:
 
-```python
-from specflow import Schema
-from specflow.type import String, Integer, Boolean
-
-schema = Schema(
-    title="Product",
-    description="Product information schema",
-    properties=[
-        String("name"),
-        String("description"),
-        Integer("price"),
-        Boolean("in_stock")
-    ]
-)
-```
-
-### Type System
-
-SpecFlow provides comprehensive type support for JSON values:
+#### String
 
 ```python
-from specflow.type import (
-    # Primitive types
-    String, Integer, Number, Boolean, Null,
-    
-    # Array types
-    StringArray, IntegerArray, NumberArray, BooleanArray, NullArray
-)
-```
-
-### Constraints
-
-All types support validation constraints:
-
-#### String Constraints
-
-```python
-from specflow.type import String
-from specflow.constraint import MinLength, MaxLength, Pattern
+from specflow.types import String
 
 String(
-    "email",
-    constraints=[
-        MinLength(5),
-        MaxLength(100),
-        Pattern(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-    ]
+    title="username",
+    description="User's username",
+    min_length=3,
+    max_length=20,
+    pattern=r"^[a-zA-Z0-9_]+$",
+    enum=["admin", "user", "guest"],  # Optional
+    const="fixed_value",  # Optional
+    nullable=False
 )
 ```
 
-#### Numeric Constraints
+#### Integer
 
 ```python
-from specflow.type import Integer, Number
-from specflow.constraint import Minimum, Maximum, ExclusiveMinimum, MultipleOf
+from specflow.types import Integer
 
-# Integer with constraints
 Integer(
-    "age",
-    constraints=[
-        Minimum(0),
-        Maximum(150)
-    ]
+    title="age",
+    minimum=0,
+    maximum=150,
+    exclusive_minimum=0,  # > 0
+    exclusive_maximum=100,  # < 100
+    mult=5,  # Multiple of 5
+    nullable=False
 )
+```
 
-# Number with precision
+#### Number (Float)
+
+```python
+from specflow.types import Number
+
 Number(
-    "price",
-    constraints=[
-        ExclusiveMinimum(0),
-        MultipleOf(0.01)
-    ]
+    title="price",
+    minimum=0.0,
+    maximum=999.99,
+    exclusive_minimum=0.0,
+    mult=0.01,  # Precision to 2 decimal places
+    nullable=False
 )
 ```
 
-#### Array Constraints
+#### Boolean
 
 ```python
-from specflow.type import IntegerArray
-from specflow.constraint import MinItems, MaxItems, MinContains
+from specflow.types import Boolean
 
-IntegerArray(
-    "scores",
-    constraints=[
-        MinItems(1),
-        MaxItems(10)
-    ]
+Boolean(
+    title="is_active",
+    default=True,
+    nullable=False
 )
 ```
 
-#### General Constraints
+### Arrays
 
 ```python
-from specflow.type import String
-from specflow.constraint import Const, Enum
+from specflow.types import Array, String, Integer
 
-# Constant value
-String("version", constraints=[Const("1.0.0")])
+# Array with single item type
+Array(
+    title="tags",
+    items=String(title="tag"),
+    min_items=1,
+    max_items=10
+)
 
-# Enumerated values
-String(
-    "status",
-    constraints=[Enum(["pending", "approved", "rejected"])]
+# Array with tuple validation (prefix items)
+Array(
+    title="coordinates",
+    prefix_items=[
+        Number(title="latitude"),
+        Number(title="longitude")
+    ]
+)
+
+# Mixed array with prefix items and additional items
+Array(
+    title="mixed",
+    prefix_items=[
+        String(title="name"),
+        Integer(title="age")
+    ],
+    items=Boolean(title="flags")  # Additional items must be boolean
 )
 ```
 
-## Advanced Usage
+### Schemas
 
-### Nested Schemas
-
-Schemas can be nested for complex data structures:
+Schemas are composite objects that group multiple properties:
 
 ```python
 from specflow import Schema
-from specflow.type import String, Integer
+from specflow.types import String, Integer
 
 address_schema = Schema(
     title="Address",
     properties=[
-        String("street"),
-        String("city"),
-        String("country"),
-        String("postal_code")
+        String(title="street"),
+        String(title="city"),
+        String(title="zipcode", pattern=r"^\d{5}$")
     ]
 )
 
+# Nested schemas
 user_schema = Schema(
     title="User",
     properties=[
-        String("name"),
-        Integer("age"),
+        String(title="name"),
         address_schema  # Nested schema
     ]
 )
-
-# Validate nested data
-user_schema({
-    "name": "John Doe",
-    "age": 30,
-    "Address": {
-        "street": "123 Main St",
-        "city": "New York",
-        "country": "USA",
-        "postal_code": "10001"
-    }
-})
 ```
 
 ### Compositions
 
-SpecFlow supports schema composition for flexible validation:
+#### AnyOf
 
-#### anyOf - At Least One Match
+Validates if the data matches **at least one** of the specified schemas:
 
 ```python
-from specflow import Schema
-from specflow.composition import AnyOf
-from specflow.type import String, Integer
+from specflow import AnyOf, Schema
+from specflow.types import String, Integer
 
-schema = Schema(
+contact_schema = Schema(
     title="Contact",
     properties=[
-        String("name"),
+        String(title="name"),
         AnyOf(
-            String("email"),
-            String("phone")
+            String(title="email"),
+            String(title="phone")
         )
     ]
 )
 
-# Valid: has email
-schema({"name": "John", "email": "john@example.com"})
+# Valid: has name and email
+data1 = {"name": "John", "email": "john@example.com"}
 
-# Valid: has phone
-schema({"name": "Jane", "phone": "555-0123"})
+# Valid: has name and phone
+data2 = {"name": "Jane", "phone": "+1234567890"}
 
-# Valid: has both
-schema({"name": "Bob", "email": "bob@example.com", "phone": "555-0456"})
+# Valid: has all three
+data3 = {"name": "Bob", "email": "bob@example.com", "phone": "+1234567890"}
 ```
 
-#### oneOf - Exactly One Match
+#### OneOf
+
+Validates if the data matches **exactly one** of the specified schemas:
 
 ```python
-from specflow.composition import OneOf
-from specflow.type import String
+from specflow import OneOf
+from specflow.types import String, Integer
 
-schema = Schema(
-    title="Payment",
-    properties=[
-        OneOf(
-            String("credit_card"),
-            String("bank_account"),
-            String("paypal_email")
-        )
-    ]
+payment_method = OneOf(
+    String(title="credit_card"),
+    String(title="paypal_email"),
+    String(title="bank_account")
 )
 
 # Valid: exactly one payment method
-schema({"credit_card": "1234-5678-9012-3456"})
+data = {"credit_card": "4111-1111-1111-1111"}
 
 # Invalid: multiple payment methods
-schema({
-    "credit_card": "1234-5678-9012-3456",
+invalid_data = {
+    "credit_card": "4111-1111-1111-1111",
     "paypal_email": "user@example.com"
-})  # Raises CompositionError
+}
 ```
 
-#### not - Inverse Match
+#### Not
+
+Validates if the data **does not** match the specified schema:
 
 ```python
-from specflow.composition import Not
-from specflow.type import String
+from specflow import Not, Schema
+from specflow.types import String
 
 schema = Schema(
-    title="SafeInput",
+    title="Example",
     properties=[
+        String(title="username"),
         Not(
-            String("forbidden_pattern", constraints=[Pattern(r"<script>")])
+            String(title="banned_word", const="admin")
         )
     ]
 )
 ```
 
-### Conditional Validation
+### Conditions
 
-Use `if-then-else` for conditional schemas:
+Define conditional validation rules with if/then/else logic:
 
 ```python
-from specflow import Schema
-from specflow.condition import Condition
-from specflow.type import String, Integer
-from specflow.constraint import Minimum
+from specflow import Schema, Condition
+from specflow.types import String, Integer
 
-# If country is "USA", then state is required
-schema = Schema(
+# If country is "US", then require state; otherwise require province
+address_schema = Schema(
     title="Address",
     properties=[
-        String("country"),
-        String("state")
+        String(title="country"),
+        String(title="state", nullable=True),
+        String(title="province", nullable=True)
     ],
     conditions=[
         Condition(
-            if_=String("country", constraints=[Const("USA")]),
-            then_=String("state", constraints=[MinLength(2)])
+            if_=String(title="country", const="US"),
+            then_=String(title="state", min_length=2),
+            else_=String(title="province", min_length=1)
         )
     ]
 )
 ```
 
-### Array Item Constraints
+## Validation
 
-Apply constraints to array items:
-
-```python
-from specflow.type import IntegerArray
-from specflow.constraint import Minimum, Maximum
-
-# Array of integers between 1 and 100
-IntegerArray(
-    "scores",
-    item_constraints=[
-        Minimum(1),
-        Maximum(100)
-    ],
-    constraints=[
-        MinItems(1),
-        MaxItems(10)
-    ]
-)
-```
-
-## Complete Examples
-
-### User Registration Schema
+### Basic Validation
 
 ```python
-from specflow import Schema
-from specflow.type import String, Integer, Boolean
-from specflow.constraint import MinLength, MaxLength, Pattern, Minimum, Maximum
-
-user_registration = Schema(
-    title="UserRegistration",
-    description="Schema for user registration data",
-    properties=[
-        String(
-            "username",
-            description="Unique username",
-            constraints=[
-                MinLength(3),
-                MaxLength(20),
-                Pattern(r"^[a-zA-Z0-9_]+$")
-            ]
-        ),
-        String(
-            "email",
-            description="Valid email address",
-            constraints=[
-                Pattern(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-            ]
-        ),
-        String(
-            "password",
-            description="Secure password",
-            constraints=[
-                MinLength(8),
-                Pattern(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)")
-            ]
-        ),
-        Integer(
-            "age",
-            description="User age",
-            constraints=[
-                Minimum(18),
-                Maximum(120)
-            ]
-        ),
-        Boolean(
-            "terms_accepted",
-            description="Terms and conditions acceptance"
-        )
-    ]
-)
-
-# Validate registration data
 try:
-    user_registration({
-        "username": "john_doe_123",
-        "email": "john@example.com",
-        "password": "SecurePass123",
-        "age": 25,
-        "terms_accepted": True
-    })
-    print("✓ Registration data is valid!")
-except Exception as e:
-    print(f"✗ Validation failed: {e}")
+    schema(data)
+    print("Validation passed!")
+except ValidationError as e:
+    print(f"Validation error: {e}")
 ```
 
-### Product Catalog Schema
+### Strict vs Non-Strict Mode
+
+```python
+# Strict mode (default): extra fields not allowed
+schema(data, strict=True)
+
+# Non-strict mode: extra fields allowed
+schema(data, strict=False)
+```
+
+### Error Paths
+
+SpecFlow provides detailed error paths for nested validation failures:
 
 ```python
 from specflow import Schema
-from specflow.type import String, Number, StringArray, Boolean
-from specflow.constraint import Minimum, MaxLength, MinItems, Enum
+from specflow.types import String, Integer, Array
 
-product_schema = Schema(
-    title="Product",
-    properties=[
-        String(
-            "sku",
-            constraints=[
-                Pattern(r"^[A-Z]{3}-\d{6}$")
-            ]
-        ),
-        String(
-            "name",
-            constraints=[
-                MinLength(1),
-                MaxLength(200)
-            ]
-        ),
-        String(
-            "description",
-            constraints=[MaxLength(1000)]
-        ),
-        Number(
-            "price",
-            constraints=[
-                Minimum(0),
-                MultipleOf(0.01)
-            ]
-        ),
-        String(
-            "category",
-            constraints=[
-                Enum(["electronics", "clothing", "books", "home", "sports"])
-            ]
-        ),
-        StringArray(
-            "tags",
-            constraints=[
-                MinItems(1),
-                MaxItems(10)
-            ]
-        ),
-        Boolean("in_stock")
-    ]
-)
-```
-
-### API Response Schema
-
-```python
-from specflow import Schema
-from specflow.composition import OneOf
-from specflow.type import String, Integer, Boolean
-
-# Success response
-success_schema = Schema(
-    title="Success",
-    properties=[
-        Boolean("success", constraints=[Const(True)]),
-        String("data")
-    ]
-)
-
-# Error response
-error_schema = Schema(
-    title="Error",
-    properties=[
-        Boolean("success", constraints=[Const(False)]),
-        String("error_message"),
-        Integer("error_code")
-    ]
-)
-
-# Combined API response
-api_response = Schema(
-    title="ApiResponse",
-    properties=[
-        OneOf(success_schema, error_schema)
-    ]
-)
-```
-
-## Schema Serialization
-
-Convert schemas to dictionary format:
-
-```python
 schema = Schema(
     title="User",
     properties=[
-        String("name", constraints=[MinLength(2)]),
-        Integer("age", constraints=[Minimum(0)])
+        String(title="name"),
+        Array(
+            title="addresses",
+            items=Schema(
+                title="Address",
+                properties=[
+                    String(title="street"),
+                    String(title="zipcode", pattern=r"^\d{5}$")
+                ]
+            )
+        )
     ]
 )
 
-# Get schema as dictionary
+data = {
+    "name": "John",
+    "addresses": [
+        {"street": "123 Main St", "zipcode": "12345"},
+        {"street": "456 Oak Ave", "zipcode": "INVALID"}
+    ]
+}
+
+try:
+    schema(data)
+except ValidationError as e:
+    print(e)
+    # Output: Validation failed at addresses[1].zipcode: Must match pattern: ^\d{5}$, got INVALID
+```
+
+## Schema Export
+
+Export schemas to JSON Schema format:
+
+```python
 schema_dict = schema.to_dict()
 print(schema_dict)
-# {
-#     "title": "User",
-#     "properties": [
-#         {"name": {"type": "string", "minLength": 2}},
-#         {"age": {"type": "integer", "minimum": 0}}
-#     ]
-# }
+```
+
+## Advanced Examples
+
+### E-commerce Product Schema
+
+```python
+from specflow import Schema, OneOf, AnyOf
+from specflow.types import String, Number, Integer, Array, Boolean
+
+product_schema = Schema(
+    title="Product",
+    description="E-commerce product",
+    properties=[
+        String(
+            title="id",
+            pattern=r"^PRD-\d{6}$"
+        ),
+        String(
+            title="name",
+            min_length=3,
+            max_length=100
+        ),
+        String(
+            title="description",
+            max_length=1000
+        ),
+        Number(
+            title="price",
+            minimum=0.01,
+            mult=0.01
+        ),
+        Integer(
+            title="stock",
+            minimum=0
+        ),
+        Array(
+            title="categories",
+            items=String(title="category"),
+            min_items=1,
+            max_items=5
+        ),
+        Array(
+            title="tags",
+            items=String(title="tag"),
+            max_items=10
+        ),
+        Boolean(
+            title="in_stock",
+            default=True
+        ),
+        OneOf(
+            String(title="color"),
+            String(title="size"),
+            String(title="material")
+        )
+    ]
+)
+```
+
+### API Response Schema with Conditions
+
+```python
+from specflow import Schema, Condition, AnyOf
+from specflow.types import String, Integer, Boolean
+
+api_response = Schema(
+    title="APIResponse",
+    properties=[
+        Integer(title="status_code"),
+        Boolean(title="success"),
+        String(title="message", nullable=True),
+        String(title="data", nullable=True),
+        String(title="error", nullable=True)
+    ],
+    conditions=[
+        Condition(
+            if_=Boolean(title="success", const=True),
+            then_=String(title="data", min_length=1),
+            else_=String(title="error", min_length=1)
+        )
+    ]
+)
 ```
 
 ## Error Handling
 
-SpecFlow provides specific error types for different validation failures:
+SpecFlow raises `ValidationError` exceptions with detailed information:
 
 ```python
-from specflow.constraint import ConstraintError
-from specflow.composition import CompositionError
-from specflow.condition import ConditionError
+from specflow.core.exceptions import ValidationError
 
 try:
     schema(data)
-except ConstraintError as e:
-    print(f"Constraint validation failed: {e}")
-except CompositionError as e:
-    print(f"Composition validation failed: {e}")
-except ConditionError as e:
-    print(f"Conditional validation failed: {e}")
-except TypeError as e:
-    print(f"Required field missing: {e}")
+except ValidationError as e:
+    print(f"Message: {e.message}")
+    print(f"Path: {e.path}")
+    print(f"Full error: {e}")
 ```
-
-## Type Safety
-
-SpecFlow provides comprehensive type hints for IDE support:
-
-```python
-from typing import Sequence
-from specflow import Schema
-from specflow.type import String, Integer
-from specflow.constraint import Constraint, MinLength
-
-# Type-safe schema creation
-username_constraints: Sequence[Constraint[str]] = [MinLength(3)]
-username: String = String("username", constraints=username_constraints)
-
-# Type-safe schema
-user_schema: Schema = Schema(
-    title="User",
-    properties=[username, Integer("age")]
-)
-```
-
-## Best Practices
-
-1. **Use descriptive titles**: Make schema purposes clear
-2. **Add descriptions**: Document what each field represents
-3. **Validate early**: Catch errors at the boundary of your system
-4. **Reuse schemas**: Create common schemas for repeated structures
-5. **Compose wisely**: Use compositions for flexible validation rules
-
-```python
-def create_email_field() -> String:
-    """Create a reusable email field with standard validation."""
-    return String(
-        "email",
-        description="Valid email address",
-        constraints=[
-            Pattern(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-        ]
-    )
-
-def create_password_field() -> String:
-    """Create a secure password field."""
-    return String(
-        "password",
-        description="Password must be 8+ chars with upper, lower, and number",
-        constraints=[
-            MinLength(8),
-            Pattern(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)")
-        ]
-    )
-
-# Reuse in multiple schemas
-login_schema = Schema(
-    title="Login",
-    properties=[
-        create_email_field(),
-        create_password_field()
-    ]
-)
-
-registration_schema = Schema(
-    title="Registration",
-    properties=[
-        String("username"),
-        create_email_field(),
-        create_password_field()
-    ]
-)
-```
-
-## Constraint Reference
-
-### String Constraints
-- `MinLength(min_: int)` - Minimum string length
-- `MaxLength(max_: int)` - Maximum string length
-- `Pattern(pattern: str)` - Regex pattern matching
-
-### Numeric Constraints
-- `Minimum(min_: float)` - Minimum value (inclusive)
-- `Maximum(max_: float)` - Maximum value (inclusive)
-- `ExclusiveMinimum(min_: float)` - Minimum value (exclusive)
-- `ExclusiveMaximum(max_: float)` - Maximum value (exclusive)
-- `MultipleOf(multiple: float)` - Value must be multiple of
-
-### Array Constraints
-- `MinItems(min_: int)` - Minimum array length
-- `MaxItems(max_: int)` - Maximum array length
-- `MinContains(min_: int)` - Minimum matching items
-- `MaxContains(max_: int)` - Maximum matching items
-
-### General Constraints
-- `Const(value: T)` - Must equal constant value
-- `Enum(values: Sequence[T])` - Must be one of enumerated values
-
-## License
-
-This project is licensed under the MIT License.
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
 ## Support
 
-If you encounter any problems or have questions, please open an issue on GitHub.
+For issues, questions, or contributions, please visit the [GitHub repository](https://github.com/yourusername/specflow).

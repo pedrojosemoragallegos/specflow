@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import re
 
-from .constraints import Const, Constraint, ConstraintError, Enum
+from specflow.core.exceptions import ValidationError
+
+from .constraints import Const, Constraint, Enum
 from .type import Type
 
 
@@ -54,7 +56,7 @@ class MinLength(Constraint[str]):
 
     def __call__(self, to_validate: str) -> None:
         if (n := len(to_validate)) < self._minimum:
-            raise ConstraintError(
+            raise ValidationError(
                 f"Length must be at least {self._minimum}, got {n}",
             )
 
@@ -76,7 +78,7 @@ class MaxLength(Constraint[str]):
             return
 
         if (n := len(to_validate)) > self._maximum:
-            raise ConstraintError(
+            raise ValidationError(
                 f"Length must be at most {self._maximum}, got {n}",
             )
 
@@ -95,6 +97,6 @@ class Pattern(Constraint[str]):
 
     def __call__(self, to_validate: str) -> None:
         if self._pattern.search(to_validate) is None:
-            raise ConstraintError(
+            raise ValidationError(
                 f"Must match pattern: {self._pattern.pattern}, got {to_validate}",
             )

@@ -1,6 +1,6 @@
 [project]
 name = "specflow"
-version = "0.0.4"
+version = "1.0.0"
 description = "A Python library for JSON Schema validation with a fluent, type-safe API"
 readme = "README.md"
 license = "MIT"
@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 dependencies = []
 keywords = ["json-schema", "validation", "schema", "json", "type-checking"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -73,4 +73,4 @@ quote-style = "double"
 indent-style = "space"
 
 [dependency-groups]
-dev = ["ipykernel>=6.30.1", "ipython>=8.37.0"]
+dev = ["ipykernel>=6.30.1", "ipython>=8.37.0", "mypy>=1.18.2"]

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from specflow.core.compositions import Composition  # noqa: TC001
+from specflow.core.exceptions import ValidationError
+
 from .types import Boolean, Integer, Number, String
 from .types.array import Array
 
 if TYPE_CHECKING:
-    from specflow.core.compositions import Composition
     from specflow.core.conditions import Condition
     from specflow.typing import Object
 
@@ -51,23 +53,37 @@ class Schema:
     def title(self) -> str:
         return self._title
 
-    def __call__(self, to_validate: Object) -> None:
+    def __call__(self, to_validate: Object, *, strict: bool = True) -> None:  # noqa: C901
         given: set[str] = set(to_validate.keys())
-
         missing: set[str] = self._required - given
 
         if missing:
             missing_fields = "', '".join(sorted(missing))
             if len(missing) == 1:
-                raise TypeError(
-                    f"Schema '{self._title}' is missing required field: '{missing_fields}'",
+                raise ValidationError(
+                    f"Missing required field: '{missing_fields}'",
                 )
-            raise TypeError(
-                f"Schema '{self._title}' is missing {len(missing)} required fields: '{missing_fields}'",
+            raise ValidationError(
+                f"Missing {len(missing)} required fields: '{missing_fields}'",
             )
 
+        if strict:
+            extra: set[str] = given - self._required
+            if extra:
+                extra_fields = "', '".join(sorted(extra))
+                if len(extra) == 1:
+                    raise ValidationError(
+                        f"Unexpected field: '{extra_fields}'",
+                    )
+                raise ValidationError(
+                    f"Unexpected {len(extra)} fields: '{extra_fields}'",
+                )
+
         for title, fn in self._items.items():
-            fn(to_validate[title])  # type: ignore
+            try:
+                fn(to_validate[title])  # type: ignore
+            except ValidationError as e:  # noqa: PERF203
+                raise e.add_path(title) from None
 
         for composition in self._compositions:
             composition(to_validate)

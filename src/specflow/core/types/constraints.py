@@ -3,13 +3,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from specflow.core.exceptions import ValidationError
+
 if TYPE_CHECKING:
     from specflow.typing import Object
 
 T = TypeVar("T", str, int, float, bool, None)
-
-
-class ConstraintError(Exception): ...
 
 
 class Constraint(ABC, Generic[T]):
@@ -42,7 +41,7 @@ class Const(Constraint[T], Generic[T]):
 
     def __call__(self, to_validate: T) -> None:
         if to_validate != self._const:
-            raise ConstraintError(
+            raise ValidationError(
                 f"Must equal {self._const!r}, got {to_validate!r}",
             )
 
@@ -64,6 +63,6 @@ class Enum(Constraint[T], Generic[T]):
 
     def __call__(self, to_validate: T) -> None:
         if to_validate not in self._enum:
-            raise ConstraintError(
+            raise ValidationError(
                 f"Must be one of {self._enum}, got {to_validate!r}",
             )

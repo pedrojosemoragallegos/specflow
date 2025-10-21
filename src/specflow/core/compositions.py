@@ -3,6 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from specflow.core.exceptions import ValidationError
+
 if TYPE_CHECKING:
     from specflow.core.types import Boolean, Integer, Number, String
     from specflow.typing import Object
@@ -11,9 +13,6 @@ if TYPE_CHECKING:
 
 
 ## Base
-class CompositionError(Exception): ...
-
-
 class Composition(ABC):
     def __init__(
         self,
@@ -30,21 +29,21 @@ class Composition(ABC):
 
     @property
     @abstractmethod
-    def _name(self) -> str: ...
+    def title(self) -> str: ...
 
     @abstractmethod
     def __call__(self, to_validate: Object) -> None: ...
 
     def to_dict(self) -> Object:
         return {
-            self._name: [item.to_dict() for item in self._items.values()],
+            self.title: [item.to_dict() for item in self._items.values()],
         }
 
 
 ## anyOf
 class AnyOf(Composition):
     @property
-    def _name(self) -> str:
+    def title(self) -> str:
         return "anyOf"
 
     def __call__(self, to_validate: Object) -> None:
@@ -53,39 +52,45 @@ class AnyOf(Composition):
         intersection: set[str] = self._options & given
 
         if not intersection:
-            raise CompositionError(f"Required: '{self._options}', given was '{given}'")
+            raise ValidationError(f"Required: '{self._options}', given was '{given}'")
 
         for title, item in self._items.items():
             if title in intersection:
-                item(to_validate[title])  # type: ignore
+                try:
+                    item(to_validate[title])  # type: ignore
+                except ValidationError as e:
+                    raise e.add_path(title) from None
 
 
 ## oneOf
 class OneOf(Composition):
     @property
-    def _name(self) -> str:
+    def title(self) -> str:
         return "oneOf"
 
     def __call__(self, to_validate: Object) -> None:
         if (n := len(to_validate)) != 1:
-            raise CompositionError(
+            raise ValidationError(
                 f"Only one of {self._options} allowed, but {n} {'were' if n != 1 else 'was'} given.",
             )
 
         given: str = next(iter(to_validate.keys()))
 
         if given not in self._options:
-            raise CompositionError(
+            raise ValidationError(
                 f"'{given}' is not valid. Must be one of {self._options}.",
             )
 
-        self._items[given](to_validate[given])  # type: ignore
+        try:
+            self._items[given](to_validate[given])  # type: ignore
+        except ValidationError as e:
+            raise e.add_path(given) from None
 
 
 ## not
 class Not(Composition):
     @property
-    def _name(self) -> str:
+    def title(self) -> str:
         return "not"
 
     def __call__(self, to_validate: Object) -> None:
@@ -97,7 +102,7 @@ class Not(Composition):
 
             try:
                 item(to_validate)  # type: ignore
-            except CompositionError:
+            except ValidationError:
                 validation_failed = True
             except Exception as e:  # noqa: BLE001
                 error = e
@@ -109,4 +114,4 @@ class Not(Composition):
                 errors.append(f"Validation '{title}' should not have passed.")  # type: ignore
 
         if errors:
-            raise CompositionError("; ".join(errors))  # type: ignore
+            raise ValidationError("; ".join(errors))  # type: ignore

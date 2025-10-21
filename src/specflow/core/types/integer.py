@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from .constraints import Constraint, ConstraintError
+from specflow.core.exceptions import ValidationError
+
+from .constraints import Constraint
 from .type import Type
 
 
@@ -55,7 +57,7 @@ class Minimum(Constraint[int]):
             return
 
         if to_validate < self._minimum:
-            raise ConstraintError(
+            raise ValidationError(
                 f"Must be at least {self._minimum}, got {to_validate}",
             )
 
@@ -77,7 +79,7 @@ class Maximum(Constraint[int]):
             return
 
         if to_validate > self._maximum:
-            raise ConstraintError(
+            raise ValidationError(
                 f"Must be at most {self._maximum}, got {to_validate}",
             )
 
@@ -99,7 +101,7 @@ class ExclusiveMinimum(Constraint[int]):
             return
 
         if to_validate <= self._minimum:
-            raise ConstraintError(
+            raise ValidationError(
                 f"Must be greater than {self._minimum}, got {to_validate}",
             )
 
@@ -121,7 +123,7 @@ class ExclusiveMaximum(Constraint[int]):
             return
 
         if to_validate >= self._maximum:
-            raise ConstraintError(
+            raise ValidationError(
                 f"Must be less than {self._maximum}, got {to_validate}",
             )
 
@@ -146,6 +148,6 @@ class MultipleOf(Constraint[int]):
             return
 
         if to_validate % self._multiple != 0:
-            raise ConstraintError(
+            raise ValidationError(
                 f"Must be a multiple of {self._multiple}, got {to_validate}",
             )

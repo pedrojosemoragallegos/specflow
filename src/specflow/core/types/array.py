@@ -3,6 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, TypeVar, cast
 
+from specflow.core.exceptions import ValidationError
+
 E = TypeVar(
     "E",
     str,
@@ -29,9 +31,6 @@ if TYPE_CHECKING:
     from .integer import Integer
     from .number import Number
     from .string import String
-
-
-class ArrayConstraintError(Exception): ...
 
 
 class ArrayConstraint(ABC):
@@ -84,7 +83,7 @@ class Array:
     def title(self) -> str:
         return self._title
 
-    def __call__(self, to_validate: list[Object] | None) -> None:  # noqa: C901
+    def __call__(self, to_validate: list[Object] | None) -> None:  # noqa: C901, PLR0912
         if self._min_items is not None:
             MinItems(self._min_items)(to_validate)
         if self._max_items is not None:
@@ -95,24 +94,30 @@ class Array:
             MaxContains(self._max_contains)(to_validate)
 
         if to_validate is not None:
-            # First, validate prefix_items (positional schemas for first N items)
             if self._prefix_items is not None:
-                for _i, (value, schema) in enumerate(
+                for i, (value, schema) in enumerate(
                     zip(to_validate, self._prefix_items, strict=False),
                 ):
-                    schema(value)  # type: ignore
+                    try:
+                        schema(value)  # type: ignore
+                    except ValidationError as e:  # noqa: PERF203
+                        raise e.add_path(i) from None
 
-                # Then validate remaining items (after prefix_items) with items schema
                 if self._items is not None and len(to_validate) > len(
                     self._prefix_items,
                 ):
-                    for value in to_validate[len(self._prefix_items) :]:
-                        self._items(value)  # type: ignore
+                    for i in range(len(self._prefix_items), len(to_validate)):
+                        try:
+                            self._items(to_validate[i])  # type: ignore
+                        except ValidationError as e:  # noqa: PERF203
+                            raise e.add_path(i) from None
 
-            # If no prefix_items, validate all items with items schema
             elif self._items is not None:
-                for value in to_validate:
-                    self._items(value)  # type: ignore
+                for i, value in enumerate(to_validate):
+                    try:
+                        self._items(value)  # type: ignore
+                    except ValidationError as e:  # noqa: PERF203
+                        raise e.add_path(i) from None
 
     def to_dict(self) -> Object:
         data: Object = {
@@ -156,7 +161,7 @@ class MinItems(ArrayConstraint):
             return
 
         if (n := len(to_validate)) < self._minimum:
-            raise ArrayConstraintError(
+            raise ValidationError(
                 f"Must have at least {self._minimum} items, got {n}",
             )
 
@@ -183,7 +188,7 @@ class MaxItems(ArrayConstraint):
             return
 
         if (n := len(to_validate)) > self._maximum:
-            raise ArrayConstraintError(
+            raise ValidationError(
                 f"Must have at most {self._maximum} items, got {n}",
             )
 
@@ -208,7 +213,7 @@ class MinContains(ArrayConstraint):
             return
 
         if (n := len(to_validate)) < self._minimum:
-            raise ArrayConstraintError(
+            raise ValidationError(
                 f"Must contain at least {self._minimum} matching items, got {n}",
             )
 
@@ -235,6 +240,6 @@ class MaxContains(ArrayConstraint):
             return
 
         if (n := len(to_validate)) > self._maximum:
-            raise ArrayConstraintError(
+            raise ValidationError(
                 f"Must contain at most {self._maximum} matching items, got {n}",
             )
