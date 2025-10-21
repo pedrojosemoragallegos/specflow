@@ -20,36 +20,36 @@ pip install specflow
 ## Quick Start
 
 ```python
-from specflow import Schema
-from specflow.types import String, Integer, Boolean, Array
+from specflow import Schema, Field
 
 # Define a user schema
 user_schema = Schema(
     title="User",
     description="A user object",
     properties=[
-        String(
+        Field(
             title="username",
             description="User's username",
             min_length=3,
             max_length=20,
             pattern=r"^[a-zA-Z0-9_]+$"
         ),
-        String(
+        Field(
             title="email",
             description="User's email address",
             pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         ),
-        Integer(
+        Field(
             title="age",
             description="User's age",
             minimum=0,
-            maximum=150
+            maximum=150,
+            default=25  # int default infers Integer type
         ),
-        Boolean(
+        Field(
             title="is_active",
             description="Whether the user account is active",
-            default=True
+            default=True  # bool default infers Boolean type
         )
     ]
 )
@@ -71,100 +71,169 @@ except ValidationError as e:
 
 ## Core Components
 
-### Types
+### Field Function with Type Inference
 
-SpecFlow provides four primitive types:
+SpecFlow provides a smart `Field()` function that automatically infers the field type based on the parameters you provide. You can also explicitly specify the type using the `type_` parameter.
 
-#### String
+#### Automatic Type Inference
+
+The `Field()` function infers the type based on:
+
+- **String-specific parameters**: `min_length`, `max_length`, `pattern`, `enum`, `const`, or a `str` default
+- **Integer-specific parameters**: numeric constraints with an `int` default
+- **Number (Float) parameters**: numeric constraints with a `float` default  
+- **Boolean**: a `bool` default value
+- **Array-specific parameters**: `min_items`, `max_items`, `items`, `prefix_items`
+
+#### String Fields
 
 ```python
-from specflow.types import String
+from specflow import Field
 
-String(
+# Inferred as String due to string-specific parameters
+Field(
     title="username",
     description="User's username",
     min_length=3,
     max_length=20,
-    pattern=r"^[a-zA-Z0-9_]+$",
-    enum=["admin", "user", "guest"],  # Optional
-    const="fixed_value",  # Optional
-    nullable=False
+    pattern=r"^[a-zA-Z0-9_]+$"
+)
+
+# With enum
+Field(
+    title="role",
+    enum=["admin", "user", "guest"]
+)
+
+# With const
+Field(
+    title="version",
+    const="1.0.0"
+)
+
+# Explicit type
+Field(
+    title="name",
+    type_="string",
+    default="Anonymous"
 )
 ```
 
-#### Integer
+#### Integer Fields
 
 ```python
-from specflow.types import Integer
+from specflow import Field
 
-Integer(
+# Inferred as Integer due to int default
+Field(
     title="age",
     minimum=0,
     maximum=150,
-    exclusive_minimum=0,  # > 0
-    exclusive_maximum=100,  # < 100
-    mult=5,  # Multiple of 5
-    nullable=False
+    default=25  # int default
+)
+
+# With multiple of constraint
+Field(
+    title="quantity",
+    minimum=1,
+    mult=5,  # Must be multiple of 5
+    default=10
+)
+
+# Explicit type
+Field(
+    title="count",
+    type_="integer",
+    minimum=0
 )
 ```
 
-#### Number (Float)
+#### Number (Float) Fields
 
 ```python
-from specflow.types import Number
+from specflow import Field
 
-Number(
+# Inferred as Number due to float default
+Field(
     title="price",
     minimum=0.0,
     maximum=999.99,
-    exclusive_minimum=0.0,
-    mult=0.01,  # Precision to 2 decimal places
-    nullable=False
+    default=19.99  # float default
+)
+
+# With precision constraint
+Field(
+    title="rating",
+    minimum=0.0,
+    maximum=5.0,
+    mult=0.5,  # Increments of 0.5
+    default=4.5
+)
+
+# Explicit type
+Field(
+    title="temperature",
+    type_="number",
+    minimum=-273.15
 )
 ```
 
-#### Boolean
+#### Boolean Fields
 
 ```python
-from specflow.types import Boolean
+from specflow import Field
 
-Boolean(
+# Inferred as Boolean due to bool default
+Field(
     title="is_active",
-    default=True,
-    nullable=False
+    default=True
+)
+
+# Explicit type
+Field(
+    title="enabled",
+    type_="boolean",
+    default=False
 )
 ```
 
 ### Arrays
 
 ```python
-from specflow.types import Array, String, Integer
+from specflow import Field
 
-# Array with single item type
-Array(
+# Array with single item type (inferred as Array due to items parameter)
+Field(
     title="tags",
-    items=String(title="tag"),
+    items=Field(title="tag", type_="string"),
     min_items=1,
     max_items=10
 )
 
 # Array with tuple validation (prefix items)
-Array(
+Field(
     title="coordinates",
     prefix_items=[
-        Number(title="latitude"),
-        Number(title="longitude")
+        Field(title="latitude", type_="number"),
+        Field(title="longitude", type_="number")
     ]
 )
 
 # Mixed array with prefix items and additional items
-Array(
+Field(
     title="mixed",
     prefix_items=[
-        String(title="name"),
-        Integer(title="age")
+        Field(title="name", type_="string"),
+        Field(title="age", default=0)  # Integer inferred
     ],
-    items=Boolean(title="flags")  # Additional items must be boolean
+    items=Field(title="flags", default=False)  # Boolean inferred
+)
+
+# Explicit type
+Field(
+    title="numbers",
+    type_="array",
+    items=Field(title="num", default=0)
 )
 ```
 
@@ -173,15 +242,14 @@ Array(
 Schemas are composite objects that group multiple properties:
 
 ```python
-from specflow import Schema
-from specflow.types import String, Integer
+from specflow import Schema, Field
 
 address_schema = Schema(
     title="Address",
     properties=[
-        String(title="street"),
-        String(title="city"),
-        String(title="zipcode", pattern=r"^\d{5}$")
+        Field(title="street", type_="string"),
+        Field(title="city", type_="string"),
+        Field(title="zipcode", pattern=r"^\d{5}$")
     ]
 )
 
@@ -189,7 +257,7 @@ address_schema = Schema(
 user_schema = Schema(
     title="User",
     properties=[
-        String(title="name"),
+        Field(title="name", type_="string"),
         address_schema  # Nested schema
     ]
 )
@@ -202,16 +270,15 @@ user_schema = Schema(
 Validates if the data matches **at least one** of the specified schemas:
 
 ```python
-from specflow import AnyOf, Schema
-from specflow.types import String, Integer
+from specflow import AnyOf, Schema, Field
 
 contact_schema = Schema(
     title="Contact",
     properties=[
-        String(title="name"),
+        Field(title="name", type_="string"),
         AnyOf(
-            String(title="email"),
-            String(title="phone")
+            Field(title="email", type_="string"),
+            Field(title="phone", type_="string")
         )
     ]
 )
@@ -231,13 +298,12 @@ data3 = {"name": "Bob", "email": "bob@example.com", "phone": "+1234567890"}
 Validates if the data matches **exactly one** of the specified schemas:
 
 ```python
-from specflow import OneOf
-from specflow.types import String, Integer
+from specflow import OneOf, Field
 
 payment_method = OneOf(
-    String(title="credit_card"),
-    String(title="paypal_email"),
-    String(title="bank_account")
+    Field(title="credit_card", type_="string"),
+    Field(title="paypal_email", type_="string"),
+    Field(title="bank_account", type_="string")
 )
 
 # Valid: exactly one payment method
@@ -255,15 +321,14 @@ invalid_data = {
 Validates if the data **does not** match the specified schema:
 
 ```python
-from specflow import Not, Schema
-from specflow.types import String
+from specflow import Not, Schema, Field
 
 schema = Schema(
     title="Example",
     properties=[
-        String(title="username"),
+        Field(title="username", type_="string"),
         Not(
-            String(title="banned_word", const="admin")
+            Field(title="banned_word", const="admin")
         )
     ]
 )
@@ -274,22 +339,21 @@ schema = Schema(
 Define conditional validation rules with if/then/else logic:
 
 ```python
-from specflow import Schema, Condition
-from specflow.types import String, Integer
+from specflow import Schema, Condition, Field
 
 # If country is "US", then require state; otherwise require province
 address_schema = Schema(
     title="Address",
     properties=[
-        String(title="country"),
-        String(title="state", nullable=True),
-        String(title="province", nullable=True)
+        Field(title="country", type_="string"),
+        Field(title="state", type_="string", nullable=True),
+        Field(title="province", type_="string", nullable=True)
     ],
     conditions=[
         Condition(
-            if_=String(title="country", const="US"),
-            then_=String(title="state", min_length=2),
-            else_=String(title="province", min_length=1)
+            if_=Field(title="country", const="US"),
+            then_=Field(title="state", min_length=2),
+            else_=Field(title="province", min_length=1)
         )
     ]
 )
@@ -322,20 +386,19 @@ schema(data, strict=False)
 SpecFlow provides detailed error paths for nested validation failures:
 
 ```python
-from specflow import Schema
-from specflow.types import String, Integer, Array
+from specflow import Schema, Field
 
 schema = Schema(
     title="User",
     properties=[
-        String(title="name"),
-        Array(
+        Field(title="name", type_="string"),
+        Field(
             title="addresses",
             items=Schema(
                 title="Address",
                 properties=[
-                    String(title="street"),
-                    String(title="zipcode", pattern=r"^\d{5}$")
+                    Field(title="street", type_="string"),
+                    Field(title="zipcode", pattern=r"^\d{5}$")
                 ]
             )
         )
@@ -371,54 +434,55 @@ print(schema_dict)
 ### E-commerce Product Schema
 
 ```python
-from specflow import Schema, OneOf, AnyOf
-from specflow.types import String, Number, Integer, Array, Boolean
+from specflow import Schema, OneOf, Field
 
 product_schema = Schema(
     title="Product",
     description="E-commerce product",
     properties=[
-        String(
+        Field(
             title="id",
             pattern=r"^PRD-\d{6}$"
         ),
-        String(
+        Field(
             title="name",
             min_length=3,
             max_length=100
         ),
-        String(
+        Field(
             title="description",
             max_length=1000
         ),
-        Number(
+        Field(
             title="price",
             minimum=0.01,
-            mult=0.01
+            mult=0.01,
+            default=0.0  # Float default infers Number
         ),
-        Integer(
+        Field(
             title="stock",
-            minimum=0
+            minimum=0,
+            default=0  # Int default infers Integer
         ),
-        Array(
+        Field(
             title="categories",
-            items=String(title="category"),
+            items=Field(title="category", type_="string"),
             min_items=1,
             max_items=5
         ),
-        Array(
+        Field(
             title="tags",
-            items=String(title="tag"),
+            items=Field(title="tag", type_="string"),
             max_items=10
         ),
-        Boolean(
+        Field(
             title="in_stock",
             default=True
         ),
         OneOf(
-            String(title="color"),
-            String(title="size"),
-            String(title="material")
+            Field(title="color", type_="string"),
+            Field(title="size", type_="string"),
+            Field(title="material", type_="string")
         )
     ]
 )
@@ -427,23 +491,22 @@ product_schema = Schema(
 ### API Response Schema with Conditions
 
 ```python
-from specflow import Schema, Condition, AnyOf
-from specflow.types import String, Integer, Boolean
+from specflow import Schema, Condition, Field
 
 api_response = Schema(
     title="APIResponse",
     properties=[
-        Integer(title="status_code"),
-        Boolean(title="success"),
-        String(title="message", nullable=True),
-        String(title="data", nullable=True),
-        String(title="error", nullable=True)
+        Field(title="status_code", default=200),
+        Field(title="success", default=True),
+        Field(title="message", type_="string", nullable=True),
+        Field(title="data", type_="string", nullable=True),
+        Field(title="error", type_="string", nullable=True)
     ],
     conditions=[
         Condition(
-            if_=Boolean(title="success", const=True),
-            then_=String(title="data", min_length=1),
-            else_=String(title="error", min_length=1)
+            if_=Field(title="success", default=True),
+            then_=Field(title="data", min_length=1),
+            else_=Field(title="error", min_length=1)
         )
     ]
 )
