@@ -1,5 +1,10 @@
 # SpecFlow
 
+[![PyPI version](https://img.shields.io/pypi/v/specflow)](https://pypi.org/project/specflow/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/specflow)](https://pypi.org/project/specflow/)
+[![Downloads](https://pepy.tech/badge/specflow)](https://pepy.tech/project/specflow)
+[![Wheel](https://img.shields.io/pypi/wheel/specflow)](https://pypi.org/project/specflow/)
+
 A modern, type-safe Python library for JSON Schema validation with a fluent, composable API. SpecFlow provides an intuitive way to define, validate, and serialize JSON schemas programmatically.
 
 ## Features
