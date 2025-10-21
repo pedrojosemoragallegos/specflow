@@ -10,6 +10,7 @@ A modern, type-safe Python library for JSON Schema validation with a fluent, com
 - **Rich Constraints** - Support for string patterns, numeric ranges, array constraints, and more
 - **Clear Error Messages** - Descriptive validation errors with path information
 - **JSON Schema Compatible** - Export schemas to JSON Schema format
+- **Extensible** - Create custom constraints for domain-specific validation
 
 ## Installation
 
@@ -525,6 +526,392 @@ except ValidationError as e:
     print(f"Message: {e.message}")
     print(f"Path: {e.path}")
     print(f"Full error: {e}")
+```
+
+## Custom Constraints
+
+You can create your own custom constraints by extending the `Constraint` base class. This allows you to implement domain-specific validation rules that go beyond the built-in constraints.
+
+### The Constraint Interface
+
+To create a custom constraint, you need to:
+
+1. Import `Constraint` from `specflow`
+2. Extend `Constraint[T]` where `T` is the type you're validating (`str`, `int`, `float`, `bool`)
+3. Implement three required properties/methods:
+   - `_name`: Returns the constraint name (for serialization)
+   - `_value`: Returns the constraint value (for serialization)
+   - `__call__`: Performs the actual validation logic
+
+### Basic Custom Constraint Example
+
+```python
+from specflow import Constraint, ValidationError, Schema, Field
+
+class EmailDomain(Constraint[str]):
+    """Validates that an email address belongs to a specific domain."""
+    
+    def __init__(self, domain: str) -> None:
+        self._domain = domain
+    
+    @property
+    def _name(self) -> str:
+        return "emailDomain"
+    
+    @property
+    def _value(self) -> str:
+        return self._domain
+    
+    def __call__(self, to_validate: str) -> None:
+        if not to_validate.endswith(f"@{self._domain}"):
+            raise ValidationError(
+                f"Email must be from domain '{self._domain}', got '{to_validate}'"
+            )
+
+# Usage
+user_schema = Schema(
+    title="User",
+    properties=[
+        Field(
+            title="email",
+            type_="string",
+            constraints=[EmailDomain("company.com")]
+        )
+    ]
+)
+
+# Valid
+user_schema({"email": "john@company.com"})
+
+# Invalid - raises ValidationError
+try:
+    user_schema({"email": "john@gmail.com"})
+except ValidationError as e:
+    print(e)  # Validation failed at email: Email must be from domain 'company.com', got 'john@gmail.com'
+```
+
+### Advanced Custom Constraint Examples
+
+#### Password Strength Validator
+
+```python
+import re
+from specflow import Constraint, ValidationError, Schema, Field
+
+class PasswordStrength(Constraint[str]):
+    """Validates password contains uppercase, lowercase, digit, and special char."""
+    
+    def __init__(self, min_length: int = 8) -> None:
+        self._min_length = min_length
+    
+    @property
+    def _name(self) -> str:
+        return "passwordStrength"
+    
+    @property
+    def _value(self) -> int:
+        return self._min_length
+    
+    def __call__(self, to_validate: str) -> None:
+        if len(to_validate) < self._min_length:
+            raise ValidationError(
+                f"Password must be at least {self._min_length} characters"
+            )
+        
+        if not re.search(r"[A-Z]", to_validate):
+            raise ValidationError("Password must contain an uppercase letter")
+        
+        if not re.search(r"[a-z]", to_validate):
+            raise ValidationError("Password must contain a lowercase letter")
+        
+        if not re.search(r"\d", to_validate):
+            raise ValidationError("Password must contain a digit")
+        
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", to_validate):
+            raise ValidationError("Password must contain a special character")
+
+# Usage
+registration_schema = Schema(
+    title="Registration",
+    properties=[
+        Field(title="username", min_length=3),
+        Field(
+            title="password",
+            type_="string",
+            constraints=[PasswordStrength(min_length=12)]
+        )
+    ]
+)
+```
+
+#### Age Range Validator (Date-based)
+
+```python
+from datetime import datetime, date
+from specflow import Constraint, ValidationError, Schema, Field
+
+class AgeRange(Constraint[str]):
+    """Validates age based on birthdate is within a range."""
+    
+    def __init__(self, min_age: int, max_age: int) -> None:
+        self._min_age = min_age
+        self._max_age = max_age
+    
+    @property
+    def _name(self) -> str:
+        return "ageRange"
+    
+    @property
+    def _value(self) -> list[int]:
+        return [self._min_age, self._max_age]
+    
+    def __call__(self, to_validate: str) -> None:
+        try:
+            birthdate = datetime.strptime(to_validate, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValidationError(
+                f"Invalid date format. Expected YYYY-MM-DD, got '{to_validate}'"
+            )
+        
+        today = date.today()
+        age = today.year - birthdate.year - (
+            (today.month, today.day) < (birthdate.month, birthdate.day)
+        )
+        
+        if age < self._min_age:
+            raise ValidationError(
+                f"Age must be at least {self._min_age}, person is {age}"
+            )
+        
+        if age > self._max_age:
+            raise ValidationError(
+                f"Age must be at most {self._max_age}, person is {age}"
+            )
+
+# Usage
+user_schema = Schema(
+    title="User",
+    properties=[
+        Field(title="name", type_="string"),
+        Field(
+            title="birthdate",
+            type_="string",
+            constraints=[AgeRange(min_age=18, max_age=65)]
+        )
+    ]
+)
+```
+
+#### Credit Card Validator (Luhn Algorithm)
+
+```python
+from specflow import Constraint, ValidationError, Schema, Field
+
+class CreditCardNumber(Constraint[str]):
+    """Validates credit card number using the Luhn algorithm."""
+    
+    @property
+    def _name(self) -> str:
+        return "creditCard"
+    
+    @property
+    def _value(self) -> bool:
+        return True
+    
+    def __call__(self, to_validate: str) -> None:
+        # Remove spaces and dashes
+        card_number = to_validate.replace(" ", "").replace("-", "")
+        
+        # Check if it's all digits
+        if not card_number.isdigit():
+            raise ValidationError("Credit card must contain only digits")
+        
+        # Check length (most cards are 13-19 digits)
+        if not 13 <= len(card_number) <= 19:
+            raise ValidationError(
+                f"Credit card must be 13-19 digits, got {len(card_number)}"
+            )
+        
+        # Luhn algorithm
+        def luhn_check(card: str) -> bool:
+            digits = [int(d) for d in card]
+            checksum = 0
+            
+            for i, digit in enumerate(reversed(digits)):
+                if i % 2 == 1:
+                    digit *= 2
+                    if digit > 9:
+                        digit -= 9
+                checksum += digit
+            
+            return checksum % 10 == 0
+        
+        if not luhn_check(card_number):
+            raise ValidationError("Invalid credit card number (failed Luhn check)")
+
+# Usage
+payment_schema = Schema(
+    title="Payment",
+    properties=[
+        Field(
+            title="card_number",
+            type_="string",
+            constraints=[CreditCardNumber()]
+        ),
+        Field(title="cvv", pattern=r"^\d{3,4}$")
+    ]
+)
+```
+
+#### IP Address Validator
+
+```python
+import ipaddress
+from specflow import Constraint, ValidationError, Schema, Field
+
+class IPAddress(Constraint[str]):
+    """Validates IPv4 or IPv6 addresses."""
+    
+    def __init__(self, version: int | None = None) -> None:
+        """
+        Args:
+            version: IP version (4 or 6). If None, accepts both.
+        """
+        if version not in (None, 4, 6):
+            raise ValueError("version must be 4, 6, or None")
+        self._version = version
+    
+    @property
+    def _name(self) -> str:
+        return "ipAddress"
+    
+    @property
+    def _value(self) -> int | None:
+        return self._version
+    
+    def __call__(self, to_validate: str) -> None:
+        try:
+            ip = ipaddress.ip_address(to_validate)
+            
+            if self._version == 4 and ip.version != 4:
+                raise ValidationError(f"Must be IPv4 address, got IPv{ip.version}")
+            
+            if self._version == 6 and ip.version != 6:
+                raise ValidationError(f"Must be IPv6 address, got IPv{ip.version}")
+                
+        except ValueError:
+            version_str = f"IPv{self._version}" if self._version else "IP"
+            raise ValidationError(f"Invalid {version_str} address: '{to_validate}'")
+
+# Usage
+network_schema = Schema(
+    title="NetworkConfig",
+    properties=[
+        Field(
+            title="ipv4",
+            type_="string",
+            constraints=[IPAddress(version=4)]
+        ),
+        Field(
+            title="ipv6",
+            type_="string",
+            constraints=[IPAddress(version=6)]
+        ),
+        Field(
+            title="any_ip",
+            type_="string",
+            constraints=[IPAddress()]
+        )
+    ]
+)
+```
+
+#### Numeric Range with Exclusions
+
+```python
+from specflow import Constraint, ValidationError, Schema, Field
+
+class RangeWithExclusions(Constraint[int]):
+    """Validates integer is in range but not in excluded values."""
+    
+    def __init__(self, minimum: int, maximum: int, exclude: list[int]) -> None:
+        self._minimum = minimum
+        self._maximum = maximum
+        self._exclude = set(exclude)
+    
+    @property
+    def _name(self) -> str:
+        return "rangeWithExclusions"
+    
+    @property
+    def _value(self) -> dict[str, int | list[int]]:
+        return {
+            "minimum": self._minimum,
+            "maximum": self._maximum,
+            "exclude": list(self._exclude)
+        }
+    
+    def __call__(self, to_validate: int) -> None:
+        if to_validate < self._minimum or to_validate > self._maximum:
+            raise ValidationError(
+                f"Must be between {self._minimum} and {self._maximum}, got {to_validate}"
+            )
+        
+        if to_validate in self._exclude:
+            raise ValidationError(
+                f"Value {to_validate} is not allowed (excluded values: {sorted(self._exclude)})"
+            )
+
+# Usage
+config_schema = Schema(
+    title="ServerConfig",
+    properties=[
+        Field(
+            title="port",
+            type_="integer",
+            constraints=[RangeWithExclusions(1000, 9999, [3000, 5000, 8080])]
+        )
+    ]
+)
+```
+
+### Tips for Creating Custom Constraints
+
+1. **Keep them focused**: Each constraint should validate one specific rule
+2. **Provide clear error messages**: Users should understand what went wrong
+3. **Handle edge cases**: Consider `None` values and invalid types
+4. **Make them reusable**: Design constraints that can be used across different schemas
+5. **Use proper type hints**: Specify `Constraint[str]`, `Constraint[int]`, etc.
+6. **Return meaningful values**: The `_value` property should represent the constraint's configuration
+
+### Combining Multiple Constraints
+
+You can apply multiple constraints to a single field:
+
+```python
+from specflow import Schema, Field
+
+user_schema = Schema(
+    title="User",
+    properties=[
+        Field(
+            title="email",
+            type_="string",
+            constraints=[
+                EmailDomain("company.com"),
+                # Add other constraints here
+            ]
+        ),
+        Field(
+            title="password",
+            type_="string",
+            constraints=[
+                PasswordStrength(min_length=12),
+                # Constraints are evaluated in order
+            ]
+        )
+    ]
+)
 ```
 
 ## Contributing
